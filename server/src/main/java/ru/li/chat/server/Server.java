@@ -28,6 +28,7 @@ public class Server {
     private final String helperStart;
     private final String helperUser;
     private final String helperAdmin;
+    private final ScheduledExecutorService executorService;
 
     public String getHelperStart() {
         return helperStart;
@@ -42,6 +43,7 @@ public class Server {
         this.helperStart = getFileContents("server/src/main/resources/helper_start.txt");
         this.helperUser = getFileContents("server/src/main/resources/helper_user.txt");
         this.helperAdmin = getFileContents("server/src/main/resources/helper_admin.txt");
+        this.executorService = Executors.newSingleThreadScheduledExecutor();
     }
 
     public void start() {
@@ -66,9 +68,11 @@ public class Server {
     }
 
     private void runTaskToCheckLatestActivity() {
-        ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         executorService.scheduleWithFixedDelay(() -> {
             for (ClientHandler clientHandler : clients.values()) {
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 if (clientHandler.getLastActivity().plusMinutes(20).isBefore(OffsetDateTime.now())) {
                     logger.info(String.format("%s отключен от чата за не активность.", clientHandler));
                     clientHandler.sendMessage(String.format("%s вы были отключены от чата. Будьте активнее!", serverPrefix()));
@@ -483,6 +487,8 @@ public class Server {
     }
 
     private synchronized void disconnect() {
+        logger.info(String.format("Остановлен поток на отслеживание активности %s", executorService));
+        executorService.shutdown();
         for (ClientHandler clientHandler : clients.values()) {
             clientHandler.disconnect();
         }
