@@ -262,11 +262,7 @@ public class Server {
             clientHandler.sendMessage(String.format("%s ник %s уже занят", serverPrefix(), newUsername));
             return;
         }
-        if (!userService.changeUsername(oldUsername, newUsername)) {
-            logger.error(String.format("%s внутренняя ошибка логики работы приложения. Не найден пользователь: %s", clientHandler, oldUsername));
-            clientHandler.sendMessage(String.format("%s внутренняя ошибка логики работы приложения. Обратитесь к администратору", serverPrefix()));
-            return;
-        }
+        userService.changeUsername(oldUsername, newUsername);
         logger.info(String.format("%s сменил ник на: %s", clientHandler, newUsername));
         clientHandler.setUsername(newUsername);
         clients.remove(oldUsername);

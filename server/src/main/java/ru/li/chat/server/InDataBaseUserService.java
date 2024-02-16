@@ -347,20 +347,10 @@ public class InDataBaseUserService implements UserService {
     }
 
     @Override
-    public boolean changeUsername(String currentUsername, String newUsername) {
-        User currentUser = null;
-        for (User user : users) {
-            if (user.username.equals(currentUsername)) {
-                currentUser = user;
-            }
-        }
-        if (currentUser == null) {
-            logger.error("Не найден пользователь при смене ника: " + currentUsername);
-            return false;
-        }
+    public void changeUsername(String currentUsername, String newUsername) {
+        User currentUser = getUserByUsername(currentUsername);
         changeUsernameInDataBase(currentUser.login, newUsername);
         currentUser.username = newUsername;
-        return true;
     }
 
     @Override

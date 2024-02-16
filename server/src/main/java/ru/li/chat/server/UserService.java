@@ -27,7 +27,7 @@ public interface UserService {
 
     void removeRole(String username, String roleName);
 
-    boolean changeUsername(String username, String newUsername);
+    void changeUsername(String username, String newUsername);
 
     void banUser(String username, OffsetDateTime banTime);
 }
