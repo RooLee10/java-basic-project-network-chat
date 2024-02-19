@@ -1,0 +1,9 @@
+/userinfo - информация о пользователе (/userinfo username)
+/roleslist - список ролей для установки/удаления пользователям
+/addrole - добавить роль пользователю (/addrole username rolename)
+/removerole - удалить роль у пользователя (/removerole username rolename)
+/ban - бан пользователя
+    */ban username 5  (бан на 5 часов)
+    */ban username - (отмена бана)
+    */ban username * (бан навсегда)
+/shutdown - остановка сервера
