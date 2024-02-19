@@ -1,5 +1,8 @@
 package ru.li.chat.server;
 
+import com.fatboyindustrial.gsonjavatime.Converters;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -8,15 +11,28 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 public class ClientHandler {
+
+    static private class Message {
+        private final OffsetDateTime date;
+        private final String text;
+
+        public Message(String text) {
+            this.date = OffsetDateTime.now(ZoneOffset.UTC);
+            this.text = text;
+        }
+    }
+
     private String username;
     private final Server server;
     private final Socket socket;
     private final DataInputStream in;
     private final DataOutputStream out;
-    private final Logger logger;
     private OffsetDateTime lastActivity;
+    private final Logger logger;
+    private final Gson gson;
 
     public String getUsername() {
         return username;
@@ -32,6 +48,7 @@ public class ClientHandler {
 
     public ClientHandler(Socket socket, Server server) throws IOException {
         this.logger = LogManager.getLogger(ClientHandler.class.getName());
+        this.gson = Converters.registerOffsetDateTime(new GsonBuilder()).create();
         this.socket = socket;
         this.in = new DataInputStream(socket.getInputStream());
         this.out = new DataOutputStream(socket.getOutputStream());
@@ -140,9 +157,10 @@ public class ClientHandler {
         }
     }
 
-    public void sendMessage(String message) {
+    public void sendMessage(String text) {
+        Message message = new Message(text);
         try {
-            out.writeUTF(message);
+            out.writeUTF(gson.toJson(message));
         } catch (IOException e) {
             logger.warn(e.getMessage());
         }
