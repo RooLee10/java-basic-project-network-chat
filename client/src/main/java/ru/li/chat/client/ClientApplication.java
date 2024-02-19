@@ -22,7 +22,7 @@ public class ClientApplication {
                 String message = scanner.nextLine();
                 message = message.trim();
                 if (!network.isConnected()) {
-                    network.getOnMessageReceived().callback(String.format("%s %s Вы не подключены к чату", localTime(), serverPrefix()));
+                    network.getOnMessageReceived().callback(String.format("%s %s Вы не подключены к серверу", localTime(), serverPrefix()));
                     break;
                 }
                 if (message.isEmpty()) {

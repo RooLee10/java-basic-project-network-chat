@@ -67,6 +67,7 @@ public class ClientHandler {
             }
         }).start();
 
+        server.addConnection(this);
         logger.info(String.format("Подключился клиент: %s:%d", socket.getInetAddress(), socket.getPort()));
     }
 
@@ -176,6 +177,7 @@ public class ClientHandler {
 
     public void disconnect() {
         logger.info(String.format("Отключился клиент: %s:%s", socket.getInetAddress(), socket.getPort()));
+        server.removeConnection(this);
         try {
             if (in != null) {
                 in.close();

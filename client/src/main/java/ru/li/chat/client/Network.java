@@ -57,11 +57,13 @@ public class Network implements AutoCloseable {
                     if (message.text.equals("/disconnect")) {
                         onMessageReceived.callback("Отключились от сервера");
                         this.connected = false;
+                        close();
                         break;
                     }
                     if (message.text.equals("/exit")) {
                         onMessageReceived.callback("Вы покинули чат");
                         this.connected = false;
+                        close();
                         break;
                     }
                     onMessageReceived.callback(message.toString());

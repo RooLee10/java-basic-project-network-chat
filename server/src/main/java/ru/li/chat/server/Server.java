@@ -10,9 +10,7 @@ import java.net.Socket;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +20,7 @@ public class Server {
     private final int port;
     private final Logger logger;
     private final Map<String, ClientHandler> clients;
+    private final List<ClientHandler> allConnections;
     private final UserService userService;
     private boolean running;
     private final String greetings;
@@ -38,6 +37,7 @@ public class Server {
         this.port = port;
         this.logger = LogManager.getLogger(Server.class.getName());
         this.clients = new HashMap<>();
+        this.allConnections = new ArrayList<>();
         this.userService = new InDataBaseUserService();
         this.greetings = getFileContents("server/src/main/resources/greetings.txt");
         this.helperStart = getFileContents("server/src/main/resources/helper_start.txt");
@@ -69,7 +69,10 @@ public class Server {
 
     private void runTaskToCheckLatestActivity() {
         executorService.scheduleWithFixedDelay(() -> {
-            for (ClientHandler clientHandler : clients.values()) {
+            logger.debug("Проверка активности запущена");
+            for (int i = allConnections.size() - 1; i >= 0; i--) {
+                ClientHandler clientHandler = allConnections.get(i);
+                logger.debug(String.format("Проверка активности %s", clientHandler));
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
@@ -79,6 +82,7 @@ public class Server {
                     clientHandler.sendMessage("/exit");
                     clientHandler.disconnect();
                 }
+                logger.debug("Проверка активности остановлена");
             }
         }, 0, 1, TimeUnit.MINUTES);
         logger.info(String.format("Запущен поток на отслеживание активности %s", executorService));
@@ -472,13 +476,24 @@ public class Server {
         clients.put(clientHandler.getUsername(), clientHandler);
     }
 
+    public synchronized void addConnection(ClientHandler clientHandler) {
+        allConnections.add(clientHandler);
+    }
+
+    public synchronized void removeConnection(ClientHandler clientHandler) {
+        allConnections.remove(clientHandler);
+    }
+
     public synchronized void shutdown(ClientHandler clientHandler) {
         if (commandNotAvailable("при выключении сервера", clientHandler)) {
             return;
         }
         running = false;
-        sendBroadcastMessage(String.format("%s Сервер был остановлен", serverPrefix()));
-        sendBroadcastMessage("/exit");
+        for (int i = allConnections.size() - 1; i >= 0; i--) {
+            ClientHandler client = allConnections.get(i);
+            client.sendMessage(String.format("%s Сервер был остановлен", serverPrefix()));
+            client.sendMessage("/disconnect");
+        }
         disconnect();
     }
 
