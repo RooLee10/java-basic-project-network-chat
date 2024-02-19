@@ -7,6 +7,7 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -33,12 +34,12 @@ public class Server {
         return helperStart;
     }
 
-    public Server(int port) {
+    public Server(int port) throws SQLException {
         this.port = port;
         this.logger = LogManager.getLogger(Server.class.getName());
         this.clients = new HashMap<>();
         this.allConnections = new ArrayList<>();
-        this.userService = new InDataBaseUserService();
+        this.userService = new DataBaseUserService();
         this.greetings = getFileContents("server/src/main/resources/greetings.txt");
         this.helperStart = getFileContents("server/src/main/resources/helper_start.txt");
         this.helperUser = getFileContents("server/src/main/resources/helper_user.txt");
