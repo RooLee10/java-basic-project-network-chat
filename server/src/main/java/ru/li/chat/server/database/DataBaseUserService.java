@@ -1,7 +1,11 @@
-package ru.li.chat.server;
+package ru.li.chat.server.database;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import ru.li.chat.server.UserRole;
+import ru.li.chat.server.UserService;
+import ru.li.chat.server.dao.RolesDao;
+import ru.li.chat.server.dao.UsersDao;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -50,20 +54,17 @@ public class DataBaseUserService implements UserService {
         }
     }
 
-    DataSource dataSource;
     private final List<User> users;
     private final Logger logger = LogManager.getLogger(DataBaseUserService.class.getName());
 
-    public DataBaseUserService() throws SQLException {
-        this.dataSource = new DataSource();
+    public DataBaseUserService() {
         this.users = new ArrayList<>();
         fillUsers();
     }
 
     private void fillUsers() {
-        String sqlQuery = "SELECT u.user_id, u.user_name, u.login, u.password, u.salt, u.ban_time, r.role_name FROM UserToRole utr JOIN Users u ON utr.user_id = u.user_id JOIN Roles r ON utr.role_id = r.role_id";
-        logger.debug("fillUsers - получение результата запроса: " + sqlQuery);
-        try (ResultSet resultSet = dataSource.getStatement().executeQuery(sqlQuery)) {
+        logger.debug("fillUsers - получение результата запроса: " + UsersDao.SQL_SELECT_ALL_USERS_DATA);
+        try (ResultSet resultSet = DataSource.getStatement().executeQuery(UsersDao.SQL_SELECT_ALL_USERS_DATA)) {
             Map<Integer, User> idToUsersData = new HashMap<>(); // Для сохранения данных о пользователях
             Map<Integer, Set<UserRole>> idToRole = new HashMap<>(); // Для сохранения ролей пользователей
             while (resultSet.next()) {
@@ -174,12 +175,13 @@ public class DataBaseUserService implements UserService {
         byte[] salt = getSalt();
         String saltString = encodeToString(salt);
         String hashedPassword = getHashString(password, salt);
-        logger.debug("createNewUser - подключение к базе данных");
-        try {
-            Connection connection = dataSource.getConnection();
+        try (Connection connection = DataSource.getConnection()) {
+            logger.debug(String.format("createNewUser %s", connection));
             connection.setAutoCommit(false);
-            insertIntoUsers(username, login, hashedPassword, saltString);
-            insertIntoUserToRole(login, role.toString());
+            insertIntoUsers(username, login, hashedPassword, saltString, connection);
+            int userId = getUserIdByLogin(login, connection);
+            int roleId = getRoleIdByRoleName(role.toString(), connection);
+            insertIntoUserToRole(userId, roleId, connection);
             connection.setAutoCommit(true);
         } catch (SQLException e) {
             logger.error(e.getMessage());
@@ -190,11 +192,9 @@ public class DataBaseUserService implements UserService {
         logger.info("Зарегистрирован новый пользователь: " + user);
     }
 
-    private void insertIntoUserToRole(String login, String roleName) throws SQLException {
-        int userId = getUserIdByLogin(login);
-        int roleId = getRoleIdByRoleName(roleName);
-        try {
-            PreparedStatement preparedStatement = dataSource.getPreparedStatementInsertIntoUserToRole();
+    private void insertIntoUserToRole(int userId, int roleId, Connection connection) throws SQLException {
+        logger.debug("insertIntoUserToRole - получение preparedStatement по запросу: " + UsersDao.SQL_INSERT_INTO_USER_TO_ROLE);
+        try (PreparedStatement preparedStatement = connection.prepareStatement(UsersDao.SQL_INSERT_INTO_USER_TO_ROLE)) {
             preparedStatement.setInt(1, userId);
             preparedStatement.setInt(2, roleId);
             logger.debug("insertIntoUserToRole - выполнение preparedStatement: " + preparedStatement);
@@ -205,9 +205,19 @@ public class DataBaseUserService implements UserService {
         }
     }
 
-    private void insertIntoUsers(String username, String login, String password, String salt) throws SQLException {
-        try {
-            PreparedStatement preparedStatement = dataSource.getPreparedStatementInsertIntoUsers();
+    private void insertIntoUserToRole(String login, String roleName) throws SQLException {
+        int userId = getUserIdByLogin(login);
+        int roleId = getRoleIdByRoleName(roleName);
+        PreparedStatement preparedStatement = UsersDao.getPreparedStatementInsertIntoUserToRole();
+        preparedStatement.setInt(1, userId);
+        preparedStatement.setInt(2, roleId);
+        logger.debug("insertIntoUserToRole - выполнение preparedStatement: " + preparedStatement);
+        preparedStatement.executeUpdate();
+    }
+
+    private void insertIntoUsers(String username, String login, String password, String salt, Connection connection) throws SQLException {
+        logger.debug("insertIntoUsers - получение preparedStatement по запросу: " + UsersDao.SQL_INSERT_INTO_USERS);
+        try (PreparedStatement preparedStatement = connection.prepareStatement(UsersDao.SQL_INSERT_INTO_USERS)) {
             preparedStatement.setString(1, username);
             preparedStatement.setString(2, login);
             preparedStatement.setString(3, password);
@@ -221,8 +231,9 @@ public class DataBaseUserService implements UserService {
     }
 
     private int getRoleIdByRoleName(String roleName) throws SQLException {
-        PreparedStatement preparedStatement = dataSource.getPreparedStatementGetRoleIdByRoleName();
+        PreparedStatement preparedStatement = RolesDao.getPreparedStatementGetRoleIdByRoleName();
         preparedStatement.setString(1, roleName);
+        logger.debug("getRoleIdByRoleName - выполнение preparedStatement: " + preparedStatement);
         try (ResultSet resultSet = preparedStatement.executeQuery()) {
             if (!resultSet.next()) {
                 createNewRole(roleName);
@@ -235,21 +246,66 @@ public class DataBaseUserService implements UserService {
         }
     }
 
+    private int getRoleIdByRoleName(String roleName, Connection connection) throws SQLException {
+        try (PreparedStatement preparedStatement = connection.prepareStatement(RolesDao.SQL_SELECT_ROLE_ID_FROM_ROLES)) {
+            preparedStatement.setString(1, roleName);
+            logger.debug("getRoleIdByRoleName - выполнение preparedStatement: " + preparedStatement);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                if (!resultSet.next()) {
+                    createNewRole(roleName, connection);
+                    return getRoleIdByRoleName(roleName, connection);
+                }
+                return resultSet.getInt(1);
+            } catch (SQLException e) {
+                logger.error(e.getMessage());
+                throw new SQLException(e);
+            }
+        }
+    }
+
     private void createNewRole(String roleName) throws SQLException {
-        PreparedStatement preparedStatement = dataSource.getPreparedStatementCreateNewRole();
+        PreparedStatement preparedStatement = RolesDao.getPreparedStatementCreateNewRole();
         preparedStatement.setString(1, roleName);
+        logger.debug("createNewRole - выполнение preparedStatement: " + preparedStatement);
         preparedStatement.executeUpdate();
     }
 
+    private void createNewRole(String roleName, Connection connection) throws SQLException {
+        try (PreparedStatement preparedStatement = connection.prepareStatement(RolesDao.SQL_INSERT_INTO_ROLES)) {
+            preparedStatement.setString(1, roleName);
+            logger.debug("createNewRole - выполнение preparedStatement: " + preparedStatement);
+            preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            logger.error(e.getMessage());
+            throw new SQLException(e);
+        }
+    }
+
+
     private int getUserIdByLogin(String login) throws SQLException {
-        PreparedStatement preparedStatement = dataSource.getPreparedStatementGetUserIdByLogin();
+        PreparedStatement preparedStatement = UsersDao.getPreparedStatementGetUserIdByLogin();
         preparedStatement.setString(1, login);
+        logger.debug("getUserIdByLogin - выполнение preparedStatement: " + preparedStatement);
         try (ResultSet resultSet = preparedStatement.executeQuery()) {
             resultSet.next();
             return resultSet.getInt(1);
         } catch (SQLException e) {
             logger.error(e.getMessage());
             throw new SQLException(e);
+        }
+    }
+
+    private int getUserIdByLogin(String login, Connection connection) throws SQLException {
+        try (PreparedStatement preparedStatement = connection.prepareStatement(UsersDao.SQL_SELECT_USER_ID_FROM_USERS)) {
+            preparedStatement.setString(1, login);
+            logger.debug("getUserIdByLogin - выполнение preparedStatement: " + preparedStatement);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            } catch (SQLException e) {
+                logger.error(e.getMessage());
+                throw new SQLException(e);
+            }
         }
     }
 
@@ -280,7 +336,7 @@ public class DataBaseUserService implements UserService {
     private void deleteFromUserToRole(String login, String roleName) throws SQLException {
         int userId = getUserIdByLogin(login);
         int roleId = getRoleIdByRoleName(roleName);
-        PreparedStatement preparedStatement = dataSource.getPreparedStatementDeleteFromUserToRole();
+        PreparedStatement preparedStatement = UsersDao.getPreparedStatementDeleteFromUserToRole();
         preparedStatement.setInt(1, userId);
         preparedStatement.setInt(2, roleId);
         logger.debug("deleteFromUserToRole - выполнение preparedStatement: " + preparedStatement);
@@ -309,7 +365,7 @@ public class DataBaseUserService implements UserService {
     }
 
     private void updateUserBanTime(int userId, OffsetDateTime banTime) throws SQLException {
-        PreparedStatement preparedStatement = dataSource.getPreparedStatementUpdateUserBanTime();
+        PreparedStatement preparedStatement = UsersDao.getPreparedStatementUpdateUserBanTime();
         preparedStatement.setObject(1, banTime);
         preparedStatement.setInt(2, userId);
         logger.debug("updateUserBanTime - выполнение preparedStatement: " + preparedStatement);
@@ -349,7 +405,7 @@ public class DataBaseUserService implements UserService {
     }
 
     private void setNewUsernameByUserId(int userId, String newUsername) throws SQLException {
-        PreparedStatement preparedStatement = dataSource.getPreparedStatementSetNewUsernameByUserId();
+        PreparedStatement preparedStatement = UsersDao.getPreparedStatementSetNewUsernameByUserId();
         preparedStatement.setString(1, newUsername);
         preparedStatement.setInt(2, userId);
         logger.debug("setNewUsernameByUserId - выполнение preparedStatement: " + preparedStatement);

@@ -3,11 +3,11 @@ package ru.li.chat.server;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.commons.lang3.StringUtils;
+import ru.li.chat.server.database.DataBaseUserService;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -34,7 +34,7 @@ public class Server {
         return helperStart;
     }
 
-    public Server(int port) throws SQLException {
+    public Server(int port) {
         this.port = port;
         this.logger = LogManager.getLogger(Server.class.getName());
         this.clients = new HashMap<>();
