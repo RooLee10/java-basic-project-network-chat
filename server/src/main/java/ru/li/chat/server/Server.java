@@ -3,6 +3,7 @@ package ru.li.chat.server;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.commons.lang3.StringUtils;
+import ru.li.chat.server.database.DataBaseUserService;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -38,7 +39,7 @@ public class Server {
         this.logger = LogManager.getLogger(Server.class.getName());
         this.clients = new HashMap<>();
         this.allConnections = new ArrayList<>();
-        this.userService = new InDataBaseUserService();
+        this.userService = new DataBaseUserService();
         this.greetings = getFileContents("server/src/main/resources/greetings.txt");
         this.helperStart = getFileContents("server/src/main/resources/helper_start.txt");
         this.helperUser = getFileContents("server/src/main/resources/helper_user.txt");
