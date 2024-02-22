@@ -57,7 +57,7 @@ public class ClientHandler {
 
         new Thread(() -> {
             try {
-                startLogic();
+                registrationAuthenticationLogic();
                 mainLogic();
             } catch (IOException e) {
                 logger.error(e.getMessage());
@@ -76,7 +76,7 @@ public class ClientHandler {
         return String.format("Клиент %s:%s (%s)", socket.getInetAddress(), socket.getPort(), username);
     }
 
-    private void startLogic() throws IOException {
+    private void registrationAuthenticationLogic() throws IOException {
         sendMessage(String.format("%s %s", serverPrefix(), server.getHelperStart()));
         while (true) {
             String message = in.readUTF();

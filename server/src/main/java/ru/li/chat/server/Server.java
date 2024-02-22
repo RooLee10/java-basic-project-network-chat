@@ -327,7 +327,7 @@ public class Server {
             clientHandler.sendMessage(String.format("%s не найден пользователь %s", serverPrefix(), username));
             return false;
         }
-        if (roleNotExist(roleName)) {
+        if (UserRole.roleNotExist(roleName)) {
             logger.warn(String.format("%s не найдена роль %s", clientHandler, roleName));
             clientHandler.sendMessage(String.format("%s не найдена роль %s", serverPrefix(), roleName));
             return false;
@@ -356,7 +356,7 @@ public class Server {
             clientHandler.sendMessage(String.format("%s не найден пользователь: %s", serverPrefix(), username));
             return false;
         }
-        if (roleNotExist(roleName)) {
+        if (UserRole.roleNotExist(roleName)) {
             logger.warn(String.format("%s не найдена роль: %s", clientHandler, roleName));
             clientHandler.sendMessage(String.format("%s не найдена роль: %s", serverPrefix(), roleName));
             return false;
@@ -369,14 +369,6 @@ public class Server {
         return true;
     }
 
-    private static boolean roleNotExist(String roleName) {
-        for (UserRole role : UserRole.values()) {
-            if (role.toString().equals(roleName)) {
-                return false;
-            }
-        }
-        return true;
-    }
 
     public synchronized void banUser(String message, ClientHandler clientHandler) {
         if (commandNotAvailable("при установке бана", clientHandler)) {
