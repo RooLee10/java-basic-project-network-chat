@@ -64,44 +64,54 @@ public class DataBaseUserService implements UserService {
 
     private void fillUsers() {
         logger.debug("fillUsers - получение результата запроса: " + UsersDao.SQL_SELECT_ALL_USERS_DATA);
-        try (ResultSet resultSet = DataSource.getStatement().executeQuery(UsersDao.SQL_SELECT_ALL_USERS_DATA)) {
-            Map<Integer, User> idToUsersData = new HashMap<>(); // Для сохранения данных о пользователях
-            Map<Integer, Set<UserRole>> idToRole = new HashMap<>(); // Для сохранения ролей пользователей
-            while (resultSet.next()) {
-                int userId = resultSet.getInt(1);
-                String userName = resultSet.getString(2);
-                String login = resultSet.getString(3);
-                String password = resultSet.getString(4);
-                String salt = resultSet.getString(5);
-                OffsetDateTime banTime = resultSet.getObject(6, OffsetDateTime.class);
-                String roleName = resultSet.getString(7);
-                // Данные о пользователях
-                if (!idToUsersData.containsKey(userId)) {
-                    User user = new User(userName, login, password, salt, banTime, new HashSet<>());
-                    idToUsersData.put(userId, user);
-                    logger.debug("fillUsers - создался пользователь: " + user);
+        try (Connection connection = DataSource.getConnection()) {
+            try (Statement statement = connection.createStatement()) {
+                try (ResultSet resultSet = statement.executeQuery(UsersDao.SQL_SELECT_ALL_USERS_DATA)) {
+                    Map<Integer, User> idToUsersData = new HashMap<>(); // Для сохранения данных о пользователях
+                    Map<Integer, Set<UserRole>> idToRole = new HashMap<>(); // Для сохранения ролей пользователей
+                    while (resultSet.next()) {
+                        int userId = resultSet.getInt(1);
+                        String userName = resultSet.getString(2);
+                        String login = resultSet.getString(3);
+                        String password = resultSet.getString(4);
+                        String salt = resultSet.getString(5);
+                        OffsetDateTime banTime = resultSet.getObject(6, OffsetDateTime.class);
+                        String roleName = resultSet.getString(7);
+                        // Данные о пользователях
+                        if (!idToUsersData.containsKey(userId)) {
+                            User user = new User(userName, login, password, salt, banTime, new HashSet<>());
+                            idToUsersData.put(userId, user);
+                            logger.debug("fillUsers - создался пользователь: " + user);
+                        }
+                        // Данные о ролях
+                        if (idToRole.containsKey(userId)) {
+                            Set<UserRole> userRoles = idToRole.get(userId);
+                            userRoles.add(UserRole.valueOf(roleName));
+                        } else {
+                            Set<UserRole> userRoles = new HashSet<>();
+                            userRoles.add(UserRole.valueOf(roleName));
+                            idToRole.put(userId, userRoles);
+                        }
+                    }
+                    // Обработаем случай первого запуска, если ещё нет пользователей, то создадим admin/admin
+                    if (idToUsersData.isEmpty()) {
+                        createNewUser("admin", "admin", getDefaultPasswordForAdmin(), UserRole.ADMIN);
+                        fillUsers(); // рекурсивно вызовем для получения данных
+                    }
+                    // Заполним роли
+                    for (int userId : idToUsersData.keySet()) {
+                        User user = idToUsersData.get(userId);
+                        user.roles = idToRole.getOrDefault(userId, new HashSet<>());
+                        this.users.add(user);
+                        logger.debug("fillUsers - заполнились роли: " + user);
+                    }
+                } catch (SQLException e) {
+                    logger.error(e.getMessage());
+                    throw new RuntimeException(e);
                 }
-                // Данные о ролях
-                if (idToRole.containsKey(userId)) {
-                    Set<UserRole> userRoles = idToRole.get(userId);
-                    userRoles.add(UserRole.valueOf(roleName));
-                } else {
-                    Set<UserRole> userRoles = new HashSet<>();
-                    userRoles.add(UserRole.valueOf(roleName));
-                    idToRole.put(userId, userRoles);
-                }
-            }
-            // Обработаем случай первого запуска, если ещё нет пользователей, то создадим admin/admin
-            if (idToUsersData.isEmpty()) {
-                createNewUser("admin", "admin", getDefaultPasswordForAdmin(), UserRole.ADMIN);
-                fillUsers(); // рекурсивно вызовем для получения данных
-            }
-            // Заполним роли
-            for (int userId : idToUsersData.keySet()) {
-                User user = idToUsersData.get(userId);
-                user.roles = idToRole.getOrDefault(userId, new HashSet<>());
-                this.users.add(user);
-                logger.debug("fillUsers - заполнились роли: " + user);
+            } catch (SQLException e) {
+                logger.error(e.getMessage());
+                throw new RuntimeException(e);
             }
         } catch (SQLException e) {
             logger.error(e.getMessage());
