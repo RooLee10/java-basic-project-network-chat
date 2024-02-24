@@ -9,7 +9,6 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -43,7 +42,7 @@ public class Server {
         this.greetings = getFileContents("server/src/main/resources/greetings.txt");
         this.helperStart = getFileContents("server/src/main/resources/helper_start.txt");
         this.helperUser = getFileContents("server/src/main/resources/helper_user.txt");
-        this.helperAdmin = getFileContents("server/src/main/resources/helper_admin.txt");
+        this.helperAdmin = helperUser + getFileContents("server/src/main/resources/helper_admin.txt");
         this.executorService = Executors.newSingleThreadScheduledExecutor();
     }
 
@@ -99,22 +98,17 @@ public class Server {
         String username = elements[1];
         String login = elements[2];
         String password = elements[3];
-        if (userService.isUsernameExists(username)) {
-            logger.warn(String.format("username уже занят: %s", username));
-            clientHandler.sendMessage(String.format("%s username уже занят", serverPrefix()));
-            return false;
-        }
-        if (userService.isLoginAlreadyExists(login)) {
-            logger.warn(String.format("login уже занят: %s", login));
-            clientHandler.sendMessage(String.format("%s login уже занят", serverPrefix()));
+        List<String> errors = userService.getRegistrationErrors(username, login, password, clientHandler);
+        if (!errors.isEmpty()) {
+            sendErrorsToUser(errors, clientHandler);
             return false;
         }
         userService.createNewUser(username, login, password, UserRole.USER);
         clientHandler.setUsername(username);
-        clientHandler.sendMessage(String.format("%s %s", serverPrefix(), greetings));
-        clientHandler.sendMessage(String.format("%s регистрация прошла успешно", serverPrefix()));
-        clientHandler.sendMessage(String.format("%s вы подключились к чату под пользователем: %s", serverPrefix(), clientHandler.getUsername()));
-        clientHandler.sendMessage(String.format("%s /? - список доступных команд", serverPrefix()));
+        clientHandler.sendMessage(String.format("%s %s\n" +
+                "регистрация прошла успешно\n" +
+                "вы подключились к чату под пользователем: %s\n" +
+                "/? - список доступных команд", serverPrefix(), greetings, clientHandler.getUsername()));
         subscribe(clientHandler);
         return true;
     }
@@ -128,28 +122,15 @@ public class Server {
         }
         String login = elements[1];
         String password = elements[2];
-        String usernameFromUserService = userService.getUsernameByLoginAndPassword(login, password);
-        if (usernameFromUserService == null) {
-            logger.warn(String.format("%s Неверно указан логин или пароль: %s", clientHandler, message));
-            clientHandler.sendMessage(String.format("%s неверно указан логин или пароль", serverPrefix()));
+        List<String> errors = userService.getAuthenticationErrors(login, password, clientHandler);
+        if (!errors.isEmpty()) {
+            sendErrorsToUser(errors, clientHandler);
             return false;
         }
+        String usernameFromUserService = userService.getUsernameByLoginAndPassword(login, password);
         if (isUserBusy(usernameFromUserService)) {
             logger.warn(String.format("%s Пользователь этой учетной записи уже в чате: %s", clientHandler, message));
             clientHandler.sendMessage(String.format("%s пользователь этой учетной записи уже в чате", serverPrefix()));
-            return false;
-        }
-        OffsetDateTime userBanTime = userService.getUserBanTime(usernameFromUserService);
-        if (userBanTime == OffsetDateTime.MAX) {
-            logger.warn(String.format("%s Попытка входа в заблокированную учетную запись: бан до %s", clientHandler, userBanTime));
-            clientHandler.sendMessage(String.format("%s учетная запись заблокирована навсегда", serverPrefix()));
-            return false;
-        }
-        if (userBanTime != null && OffsetDateTime.now().isBefore(userBanTime)) {
-            logger.warn(String.format("%s Попытка входа в заблокированную учетную запись: бан до %s", clientHandler, userBanTime));
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss ZZZZ");
-            formatter.withZone(ZoneId.systemDefault());
-            clientHandler.sendMessage(String.format("%s учетная запись заблокирована до %s", serverPrefix(), userBanTime.format(formatter)));
             return false;
         }
         clientHandler.setUsername(usernameFromUserService);
@@ -163,7 +144,7 @@ public class Server {
     public String getCommandList(ClientHandler clientHandler) {
         String commandList = helperUser;
         if (isUserAdmin(clientHandler.getUsername())) {
-            commandList += helperAdmin;
+            commandList = helperAdmin;
         }
         return commandList;
     }
@@ -449,6 +430,12 @@ public class Server {
 
     private boolean isUserBusy(String username) {
         return clients.containsKey(username);
+    }
+
+    private void sendErrorsToUser(List<String> errors, ClientHandler clientHandler) {
+        for (String message : errors) {
+            clientHandler.sendMessage(String.format("%s %s", serverPrefix(), message));
+        }
     }
 
     public String serverPrefix() {

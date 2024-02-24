@@ -57,8 +57,8 @@ public class ClientHandler {
 
         new Thread(() -> {
             try {
-                registrationAuthenticationLogic();
-                mainLogic();
+                registrationAuthentication();
+                doChat();
             } catch (IOException e) {
                 logger.error(e.getMessage());
             } finally {
@@ -76,7 +76,7 @@ public class ClientHandler {
         return String.format("Клиент %s:%s (%s)", socket.getInetAddress(), socket.getPort(), username);
     }
 
-    private void registrationAuthenticationLogic() throws IOException {
+    private void registrationAuthentication() throws IOException {
         sendMessage(String.format("%s %s", serverPrefix(), server.getHelperStart()));
         while (true) {
             String message = in.readUTF();
@@ -100,7 +100,7 @@ public class ClientHandler {
         }
     }
 
-    private void mainLogic() throws IOException {
+    private void doChat() throws IOException {
         while (true) {
             String message = in.readUTF();
             setLastActivity();

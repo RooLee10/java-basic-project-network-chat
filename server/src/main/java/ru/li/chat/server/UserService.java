@@ -1,6 +1,7 @@
 package ru.li.chat.server;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public interface UserService {
     String getUsernameByLoginAndPassword(String login, String password);
@@ -30,4 +31,8 @@ public interface UserService {
     void changeUsername(String username, String newUsername);
 
     void banUser(String username, OffsetDateTime banTime);
+
+    List<String> getRegistrationErrors(String username, String login, String password, ClientHandler clientHandler);
+
+    List<String> getAuthenticationErrors(String login, String password, ClientHandler clientHandler);
 }
